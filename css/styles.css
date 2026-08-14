@@ -20,7 +20,7 @@
   --radius-lg:26px;
 
   --ease:cubic-bezier(.22,.61,.36,1);
-  --nav-h:66px;   /* da aire al logo: el arte es de dos líneas y a menos altura no se lee */
+  --nav-h:56px;
 
   /* alturas de las piezas con imagen (en unidades absolutas:
      los % no resuelven bien dentro de una grid de alto automático) */
@@ -135,11 +135,10 @@ button{font:inherit;color:inherit;}
   display:flex;align-items:center;gap:22px;
 }
 
-/* El logo es un WebP con transparencia: se apoya directamente sobre la barra,
-   sin recuadro ni fondo propio. */
+/* WebP con transparencia: se apoya sobre la barra sin recuadro propio. */
 .logo{display:flex;align-items:center;flex:0 0 auto;}
 .logo img{
-  height:50px;width:auto;display:block;
+  height:40px;width:auto;display:block;
   transition:transform .25s var(--ease);
 }
 .logo:hover img{transform:scale(1.03);}
@@ -664,7 +663,7 @@ button{font:inherit;color:inherit;}
    teléfono juntos no caben a tamaño completo. */
 @media (max-width:400px){
   .nav__inner{padding:0 16px;gap:10px;}
-  .logo img{height:44px;}
+  .logo img{height:34px;}
   .nav__tel{padding:6px 11px;font-size:12px;margin-right:0;}
   .nav__tel svg{width:13px;height:13px;}
   .btn{padding:12px 20px;font-size:14px;}
