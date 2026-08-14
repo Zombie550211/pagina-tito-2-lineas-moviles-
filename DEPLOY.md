@@ -84,6 +84,23 @@ bucket los archivos que ya no existen en la carpeta.
 | CSS y JS | revalidar siempre | no llevan hash en el nombre; si se cachearan, el diseño se rompería tras un cambio |
 | Imágenes | 7 días | pesan más y cambian poco |
 
+### Al reemplazar una imagen: súbele el número de versión
+
+Los 7 días de caché de las imágenes los aplica el **navegador**, y refrescar
+CloudFront no los toca: durante una semana el visitante seguirá viendo la
+imagen vieja aunque el servidor ya tenga la nueva.
+
+Si sustituyes una imagen conservando su nombre, hay que cambiarle la
+dirección en el HTML para que el navegador la trate como otro archivo:
+
+```html
+<img src="images/logo.webp?v=2">   <!-- pasa a ?v=3, ?v=4... -->
+```
+
+Funciona porque el HTML sí se revalida en cada visita, así que el navegador
+recibe la ruta nueva de inmediato. Cambiar el nombre del archivo
+(`logo-2.webp`) sirve igual.
+
 El script termina invalidando la caché de CloudFront (`/*`). Sin ese paso,
 CloudFront seguiría sirviendo la versión anterior durante horas. AWS regala
 1.000 invalidaciones al mes.
