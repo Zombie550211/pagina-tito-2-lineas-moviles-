@@ -11,7 +11,7 @@
 set -euo pipefail
 
 BUCKET="${S3_BUCKET:-offers-mobile-com-site}"
-DIST_ID="${CLOUDFRONT_DISTRIBUTION_ID:-}"
+DIST_ID="${CLOUDFRONT_DISTRIBUTION_ID:-E7BU4L870R10F}"
 
 # El usuario con permisos es connecting-deploy (perfil "connecting").
 # El perfil por defecto es crm-migration y no puede desplegar.
