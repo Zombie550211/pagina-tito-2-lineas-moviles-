@@ -64,6 +64,19 @@ El DNS tuvo que moverse a Route 53 porque el dominio raíz (sin `www`) no
 admite un CNAME hacia CloudFront: el estándar de DNS no lo permite en la
 raíz. Route 53 lo resuelve con un registro *A alias*, propio de AWS.
 
+### Registros DNS de la zona
+
+| Nombre | Tipo | Apunta a |
+|---|---|---|
+| `offers-mobile.com` | A alias | la distribución de CloudFront |
+| `offers-mobile.com` | AAAA alias | la misma, por IPv6 |
+| `www.offers-mobile.com` | A alias | la distribución |
+| `www.offers-mobile.com` | AAAA alias | la misma, por IPv6 |
+
+Los **AAAA** hacen falta porque la distribución tiene IPv6 activado: sin
+ellos el dominio solo responde por IPv4, y buena parte del tráfico móvil va
+por IPv6. Crear la distribución no los añade solo, hay que ponerlos a mano.
+
 ## Publicar cambios
 
 ```bash
