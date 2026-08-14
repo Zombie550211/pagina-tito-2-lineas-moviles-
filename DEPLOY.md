@@ -1,8 +1,7 @@
 # Publicar en AWS (S3 + CloudFront)
 
-El sitio es estático (solo HTML, CSS, JS e imágenes), así que no necesita
-servidor. Los archivos viven en un bucket de S3 y CloudFront los reparte por
-HTTPS desde servidores repartidos por el mundo.
+El sitio es estático, así que no necesita servidor. Los archivos viven en un
+bucket de S3 y CloudFront los reparte por HTTPS desde todo el mundo.
 
 ```
 offers-mobile.com
@@ -14,98 +13,98 @@ offers-mobile.com
      S3              los archivos, en un bucket privado
 ```
 
-## Antes de empezar
+## Credenciales
 
-Las credenciales que tienes configuradas ahora son del usuario
-`crm-migration` y **no tienen permisos** sobre S3, CloudFront, Route 53 ni
-ACM. Necesitas un usuario o rol con acceso a esos cuatro servicios:
-
-```bash
-aws sts get-caller-identity      # comprueba con qué usuario estás
-aws configure --profile tito     # o configura uno nuevo
-export AWS_PROFILE=tito
-```
-
-## Configuración inicial (una sola vez)
-
-### 1. Crear el bucket
-
-La región `us-east-2` (Ohio) es la que ya tienes configurada; sirve igual
-porque quien atiende a los visitantes es CloudFront, no S3.
+El perfil por defecto de la máquina es `crm-migration` y **no tiene permisos**
+para desplegar. Hay que usar el perfil `connecting` (usuario
+`connecting-deploy`), que es el que ya gestiona `speed-internet.com`.
 
 ```bash
-aws s3 mb s3://offers-mobile.com --region us-east-2
+export AWS_PROFILE=connecting
+aws sts get-caller-identity      # debe decir .../connecting-deploy
 ```
 
-Déjalo **privado**, sin activar "static website hosting". CloudFront leerá
-del bucket con un permiso propio (OAC), que es más seguro: nadie puede
-saltarse CloudFront y entrar directo al bucket.
+`deploy.sh` ya selecciona ese perfil solo.
 
-### 2. Certificado SSL
+## Recursos creados
 
-Tiene que estar en **us-east-1**, sí o sí. Es un requisito de CloudFront,
-aunque tu bucket esté en Ohio.
+| Recurso | Valor |
+|---|---|
+| Bucket S3 | `offers-mobile-com-site` (us-east-1, privado) |
+| Zona Route 53 | `Z04527081X56OCA8EQBVC` |
+| Certificado ACM | `arn:aws:acm:us-east-1:964060772387:certificate/b8b0def4-952c-4993-bf01-2914c2eece74` |
+| Distribución CloudFront | *pendiente: necesita el certificado validado* |
+
+Cuenta AWS: `964060772387`.
+
+## Paso pendiente: cambiar los nameservers en Hostinger
+
+El dominio está registrado en Hostinger y su DNS todavía apunta a la página
+de parking. Hay que cambiarlo en el panel de Hostinger, en la sección de
+DNS / Nameservers del dominio, y poner estos cuatro:
+
+```
+ns-604.awsdns-11.net
+ns-2040.awsdns-63.co.uk
+ns-99.awsdns-12.com
+ns-1382.awsdns-44.org
+```
+
+Hasta que ese cambio se propague (de unos minutos a 48 horas, normalmente
+menos de 2), el certificado no se puede validar y CloudFront no se puede
+crear. Para comprobar cómo va:
 
 ```bash
-aws acm request-certificate \
-  --domain-name offers-mobile.com \
-  --subject-alternative-names www.offers-mobile.com \
-  --validation-method DNS \
-  --region us-east-1
+dig +short offers-mobile.com NS                  # deben salir los de AWS
+aws acm describe-certificate --region us-east-1 \
+  --certificate-arn arn:aws:acm:us-east-1:964060772387:certificate/b8b0def4-952c-4993-bf01-2914c2eece74 \
+  --query 'Certificate.Status' --output text     # debe decir ISSUED
 ```
 
-Para validarlo hay que añadir un registro CNAME al DNS. Si el dominio está
-en Route 53, la consola de ACM tiene un botón "Create records in Route 53"
-que lo hace solo. Si lo compraste en otro sitio (GoDaddy, Namecheap...),
-copia el nombre y el valor que te da ACM y créalo a mano allí.
+Los registros que validan el certificado ya están puestos en la zona de
+Route 53; en cuanto el dominio apunte allí, ACM lo detecta solo.
 
-Tarda entre 5 minutos y unas horas en pasar a `ISSUED`.
+### Por qué hay que mover el DNS
 
-### 3. Distribución de CloudFront
+El dominio raíz (`offers-mobile.com`, sin `www`) no puede apuntar a
+CloudFront con un CNAME: el estándar de DNS no lo permite en la raíz de un
+dominio. Route 53 lo resuelve con un registro *A alias*, que es una
+extensión propia de AWS. Hostinger no ofrece equivalente.
 
-Desde la consola es más rápido que por CLI. Los valores que importan:
+## Cuando el certificado esté validado
+
+Falta crear la distribución de CloudFront con estos valores (los mismos que
+`speed-internet.com`, que ya funciona):
 
 | Campo | Valor |
 |---|---|
-| Origin | el bucket `offers-mobile.com` |
-| Origin access | Origin access control (OAC), y aplicar la política que sugiere |
+| Origin | `offers-mobile-com-site.s3.us-east-1.amazonaws.com` |
+| Origin access | Origin access control (OAC) |
 | Viewer protocol policy | Redirect HTTP to HTTPS |
 | Default root object | `index.html` |
-| Alternate domain names | `offers-mobile.com` y `www.offers-mobile.com` |
-| Custom SSL certificate | el del paso 2 |
+| Alternate domain names | `offers-mobile.com`, `www.offers-mobile.com` |
+| Custom SSL certificate | el de la tabla de arriba |
 | Compress objects automatically | sí |
 
-El **default root object** es necesario para que `offers-mobile.com/` cargue
-la portada. Las demás páginas (`/ayuda.html`, `/contacto.html`...) funcionan
-sin configurar nada, porque son archivos reales dentro del bucket.
+Después, en Route 53, dos registros **A** con *Alias* activado (raíz y
+`www`) apuntando a la distribución, y añadir la política del bucket que
+autoriza a CloudFront a leerlo.
 
-### 4. Apuntar el dominio
-
-En Route 53, dentro de la zona de `offers-mobile.com`, crea dos registros
-de tipo **A** con la opción *Alias* activada, apuntando a la distribución
-de CloudFront:
-
-- `offers-mobile.com`
-- `www.offers-mobile.com`
-
-Si el DNS está fuera de AWS, crea un CNAME de `www` hacia el dominio de
-CloudFront (`d111111abcdef8.cloudfront.net`). Ojo: el dominio raíz sin
-`www` no admite CNAME según el estándar de DNS; para eso hace falta
-Route 53 o un proveedor con "ALIAS" o "ANAME".
+El **default root object** es lo que hace que `offers-mobile.com/` cargue la
+portada. Las demás páginas (`/ayuda.html`...) funcionan sin configurar nada,
+porque son archivos reales del bucket.
 
 ## Publicar cambios
 
-Una vez montado lo anterior:
-
 ```bash
-export CLOUDFRONT_DISTRIBUTION_ID=E1234567890ABC   # el ID de tu distribución
+export CLOUDFRONT_DISTRIBUTION_ID=E...   # cuando exista la distribución
 
 ./deploy.sh --dry-run    # ver qué se subiría, sin tocar nada
 ./deploy.sh              # publicar
 ```
 
-Merece la pena lanzar siempre el `--dry-run` la primera vez, porque el
-script borra del bucket los archivos que ya no existen en la carpeta.
+Conviene lanzar el `--dry-run` cuando haya dudas, porque el script borra del
+bucket los archivos que ya no existen en la carpeta.
 
 ### Cómo se cachean los archivos
 
@@ -115,27 +114,23 @@ script borra del bucket los archivos que ya no existen en la carpeta.
 | CSS y JS | revalidar siempre | no llevan hash en el nombre; si se cachearan, el diseño se rompería tras un cambio |
 | Imágenes | 7 días | pesan más y cambian poco |
 
-El script termina invalidando la caché de CloudFront (`/*`), que es lo que
-hace que los cambios se vean de verdad. Sin ese paso, CloudFront seguiría
-sirviendo la versión anterior durante horas.
-
-AWS regala 1.000 invalidaciones al mes; a partir de ahí cuestan unos
-0,005 USD cada una.
+El script termina invalidando la caché de CloudFront (`/*`). Sin ese paso,
+CloudFront seguiría sirviendo la versión anterior durante horas. AWS regala
+1.000 invalidaciones al mes.
 
 ## Coste aproximado
 
-Para un sitio de este tamaño (1,1 MB de imágenes, tráfico bajo), entre
-**1 y 3 USD al mes**: unos céntimos de S3, el primer año de CloudFront casi
-cubierto por la capa gratuita, y 0,50 USD fijos por la zona de Route 53.
-El certificado de ACM es gratis.
+Entre **1 y 3 USD al mes** para este tamaño (1 MB de archivos, tráfico bajo):
+unos céntimos de S3, CloudFront casi cubierto por la capa gratuita el primer
+año, y 0,50 USD fijos por la zona de Route 53. El certificado es gratis.
 
 ## Si algo falla
 
-- **Sale "Access Denied" al entrar en la web** → falta la política del bucket
-  que autoriza a CloudFront (OAC), o el *default root object* no está puesto.
+- **"Access Denied" al entrar en la web** → falta la política del bucket que
+  autoriza a CloudFront (OAC), o el *default root object* no está puesto.
 - **Los cambios no se ven** → no se invalidó la caché; revisa que
   `CLOUDFRONT_DISTRIBUTION_ID` esté exportado.
-- **El certificado no aparece al elegirlo en CloudFront** → se pidió en una
-  región que no es us-east-1, o todavía no está en estado `ISSUED`.
-- **Una imagen se descarga en vez de mostrarse** → se subió con el
-  content-type equivocado; `./deploy.sh` los fuerza correctamente.
+- **El certificado sigue en `PENDING_VALIDATION`** → los nameservers todavía
+  no apuntan a AWS, o no han propagado.
+- **Una imagen se descarga en vez de mostrarse** → content-type equivocado;
+  `deploy.sh` los fuerza correctamente.

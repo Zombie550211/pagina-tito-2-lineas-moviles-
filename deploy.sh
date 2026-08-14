@@ -10,8 +10,12 @@
 #
 set -euo pipefail
 
-BUCKET="${S3_BUCKET:-offers-mobile.com}"
+BUCKET="${S3_BUCKET:-offers-mobile-com-site}"
 DIST_ID="${CLOUDFRONT_DISTRIBUTION_ID:-}"
+
+# El usuario con permisos es connecting-deploy (perfil "connecting").
+# El perfil por defecto es crm-migration y no puede desplegar.
+export AWS_PROFILE="${AWS_PROFILE:-connecting}"
 
 DRYRUN=()
 if [[ "${1:-}" == "--dry-run" ]]; then
