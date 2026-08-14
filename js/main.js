@@ -1,5 +1,5 @@
 /* =========================================================
-   PureWireless — interacciones
+   Offers Mobile — interacciones
    ========================================================= */
 (function () {
   'use strict';
